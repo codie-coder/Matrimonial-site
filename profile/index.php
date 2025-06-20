@@ -1,0 +1,383 @@
+<?php
+session_start();
+if (!isset($_SESSION['email'])) {
+    header("Location: ../auth/login.php");
+    exit;
+}
+
+include '../includes/db.php';  // Your DB connection
+
+// Fetch logged-in user's profile picture for the avatar
+$user_email = $_SESSION['email'];
+$sql_user = "SELECT profile_pic FROM users WHERE email = ?";
+$stmt = $conn->prepare($sql_user);
+$stmt->bind_param("s", $user_email);
+$stmt->execute();
+$result_user = $stmt->get_result();
+
+$my_profile_pic = "https://cdn-icons-png.flaticon.com/512/847/847969.png"; // default fallback avatar
+
+if ($result_user && $result_user->num_rows > 0) {
+    $row = $result_user->fetch_assoc();
+    if (!empty($row['profile_pic'])) {
+        // Adjust path as needed to match your folder structure
+        $my_profile_pic = "../" . htmlspecialchars($row['profile_pic']);
+    }
+}
+$stmt->close();
+
+// Fetch one random verified user (removed profession & location)
+$sql = "SELECT id, name, age, gender, bio, profile_pic FROM users WHERE verified=1 ORDER BY RAND() LIMIT 1";
+$result = $conn->query($sql);
+
+if ($result && $result->num_rows > 0) {
+    $suggestion = $result->fetch_assoc();
+
+    // Fallbacks if some fields missing
+    $suggestion['profile_pic'] = !empty($suggestion['profile_pic']) ? "../" . htmlspecialchars($suggestion['profile_pic']) : "https://randomuser.me/api/portraits/women/65.jpg";
+    $suggestion['bio'] = $suggestion['bio'] ?? "";
+    $suggestion['gender'] = $suggestion['gender'] ?? "Unknown";
+} else {
+    // If no users found, use placeholder
+    $suggestion = [
+        'id' => '',
+        'name' => 'No Profile',
+        'age' => '--',
+        'gender' => 'N/A',
+        'bio' => '',
+        'profile_pic' => "https://randomuser.me/api/portraits/women/65.jpg"
+    ];
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>My Matrimony Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Poppins:wght@300;500&display=swap" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(120deg, #ffe6f0 0%, #fff0f5 100%), url('https://cdn.pixabay.com/photo/2016/11/29/06/15/beautiful-1867093_1280.jpg');
+            background-size: cover;
+            background-blend-mode: overlay;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        .notif {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 1.6rem;
+            text-decoration: none;
+            background: rgba(255, 255, 255, 0.4);
+            padding: 10px 18px;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            color: #b83280;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .notif:hover {
+            background: rgba(255, 255, 255, 0.7);
+            transform: scale(1.05);
+        }
+
+        .welcome-banner {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.6);
+            padding: 1rem 2rem;
+            border-radius: 20px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #b83280;
+            animation: slideIn 1s ease forwards;
+        }
+
+        @keyframes slideIn {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -30px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+
+        .avatar {
+            position: absolute;
+            top: 60px;
+            left: 40px;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 3px solid #fff0f5;
+            /* Remove default background image */
+            background-image: url('https://cdn-icons-png.flaticon.com/512/847/847969.png'); 
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(15px);
+            padding: 3rem;
+            border-radius: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            max-width: 780px;
+            width: 100%;
+            animation: fadeIn 1s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        h2 {
+            font-family: 'Great Vibes', cursive;
+            font-size: 3rem;
+            color: #b83280;
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .suggestion-card {
+            background: rgba(255, 240, 245, 0.6);
+            border: 1px solid #f7c7da;
+            padding: 20px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            backdrop-filter: blur(10px);
+        }
+
+        .suggestion-card img {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #fff;
+        }
+
+        .suggestion-content {
+            flex: 1;
+        }
+
+        .suggestion-content h3 {
+            font-size: 1.4rem;
+            margin-bottom: 6px;
+            color: #b20c5c;
+        }
+
+        .suggestion-content p {
+            font-size: 0.95rem;
+            color: #555;
+        }
+
+        .suggestion-content a {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 8px 14px;
+            background: #b83280;
+            color: white;
+            text-decoration: none;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            transition: 0.3s;
+        }
+
+        .suggestion-content a:hover {
+            background: #a0256d;
+        }
+
+        ul {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            list-style: none;
+        }
+
+        li a {
+            background: #fff0f6;
+            padding: 18px 20px;
+            border-radius: 18px;
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            border: 1px solid #f7c7da;
+        }
+
+        li a:hover {
+            background: #ffe0ec;
+            color: #b83280;
+            transform: translateY(-4px) scale(1.03);
+        }
+
+        .logout {
+            margin-top: 2rem;
+            text-align: right;
+        }
+
+        .logout a {
+            color: #b20c5c;
+            font-weight: 500;
+            text-decoration: none;
+            font-size: 1.05rem;
+            padding: 10px 16px;
+            border-radius: 30px;
+            background: #fff0f5;
+            border: 1px solid #f2b9cc;
+            transition: 0.3s;
+        }
+
+        .logout a:hover {
+            background: #ffd6e7;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 2rem;
+            }
+
+            h2 {
+                font-size: 2.2rem;
+            }
+
+            .notif {
+                font-size: 1.2rem;
+                padding: 8px 14px;
+                top: 15px;
+                right: 15px;
+            }
+
+            .avatar {
+                width: 55px;
+                height: 55px;
+                top: 50px;
+                left: 20px;
+            }
+
+            .welcome-banner {
+                font-size: 1.2rem;
+                padding: 0.8rem 1.4rem;
+            }
+
+            .suggestion-card {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .suggestion-card img {
+                margin-bottom: 10px;
+            }
+
+            .suggestion-content a {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Notification Bell -->
+    <a href="../notifications/view.php" id="notif-count" class="notif">🔔</a>
+
+    <!-- Avatar with user's profile pic -->
+    <div class="avatar" style="background-image: url('<?= $my_profile_pic ?>');"></div>
+
+    <!-- Welcome -->
+    <div class="welcome-banner">Welcome back, Priya!</div>
+
+    <div class="container">
+        <h2>My Matrimony Dashboard</h2>
+
+        <!-- Match Suggestion -->
+        <div class="suggestion-card">
+            <img src="<?= $suggestion['profile_pic'] ?>" alt="Suggested Match" />
+            <div class="suggestion-content">
+                <h3>
+                    <?= htmlspecialchars($suggestion['name']) ?>,
+                    <?= htmlspecialchars($suggestion['age']) ?>
+                </h3>
+                <p>
+                    Gender: <?= htmlspecialchars(ucfirst($suggestion['gender'])) ?>
+                    <?php if (!empty($suggestion['bio'])): ?> |
+                        <?= htmlspecialchars($suggestion['bio']) ?>
+                    <?php endif; ?>
+                </p>
+                <a href="view-profile.php?id=<?= urlencode($suggestion['id']) ?>">💖 View Profile</a>
+            </div>
+        </div>
+
+        <!-- Dashboard Links -->
+        <ul>
+            <li><a href="create-profile.php">📝 Create / Update Profile</a></li>
+            <li><a href="view-profiles.php">👀 View All Profiles</a></li>
+            <li><a href="match-search.php">🔍 Search Matches</a></li>
+            <li><a href="../messages/inbox.php">💬 Message Center</a></li>
+            <li><a href="../analytics/stats.php">📊 View Analytics</a></li>
+            <li><a href="../settings/index.php">⚙️ Account Settings</a></li>
+            <li><a href="../premium/subscribe.php">💎 Go Premium</a></li>
+        </ul>
+
+        <div class="logout">
+            <a href="../auth/logout.php">🚪 Logout</a>
+        </div>
+    </div>
+
+    <script>
+        setInterval(() => {
+            fetch('../notifications/notify.php')
+                .then(res => res.json())
+                .then(data => {
+                    const notif = document.getElementById('notif-count');
+                    notif.innerText = data.count > 0 ? `🔔 ${data.count}` : '🔔';
+                });
+        }, 5000);
+    </script>
+</body>
+
+</html>
